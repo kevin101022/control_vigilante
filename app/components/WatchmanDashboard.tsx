@@ -11,7 +11,9 @@ import {
     Clock,
     FileText,
     History,
-    Calendar
+    Calendar,
+    X,
+    ArrowLeft
 } from 'lucide-react';
 
 // Initial Mock Data
@@ -169,12 +171,15 @@ export default function WatchmanDashboard() {
         console.log('Salida Registrada:', logEntry);
 
         setShowSuccessModal(true);
-        setTimeout(() => {
-            setShowSuccessModal(false);
-            setCurrentAuth(null);
-            setSearchQuery('');
-            setSelectedItems([]);
-        }, 3000);
+    };
+
+    // Close success modal and reset form
+    const closeSuccessModal = () => {
+        setShowSuccessModal(false);
+        setCurrentAuth(null);
+        setSearchQuery('');
+        setSelectedItems([]);
+        setObservations('');
     };
 
     // Register Re-entry - Updates state and logs action
@@ -213,12 +218,6 @@ export default function WatchmanDashboard() {
         console.log('Reingreso Registrado:', logEntry);
 
         setShowSuccessModal(true);
-        setTimeout(() => {
-            setShowSuccessModal(false);
-            setCurrentAuth(null);
-            setSearchQuery('');
-            setObservations('');
-        }, 3000);
     };
 
     const canRegisterExit = validationStatus.isValid && selectedItems.length > 0;
@@ -288,23 +287,39 @@ export default function WatchmanDashboard() {
     return (
         <div className="min-h-screen bg-[#F9FAFB]">
             {/* Header */}
-            <header className="bg-white shadow-sm border-b border-gray-200">
+            <header className="bg-[#39A900] shadow-sm">
                 <div className="w-full px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4">
                     <img
-                        src="https://res.cloudinary.com/dil3rjo71/image/upload/v1763962278/LOGO-SENA_jqqvft_hfkr1m.png"
+                        src="https://res.cloudinary.com/dil3rjo71/image/upload/v1763990215/logo-de-Sena-sin-fondo-Blanco-300x300_tlss3c.webp"
                         alt="SENA Logo"
                         className="h-12 w-12 object-contain"
                         onError={(e) => {
                             e.currentTarget.style.display = 'none';
                         }}
                     />
-                    <h1 className="text-2xl font-bold text-[#00304D]" style={{ fontFamily: '"Work Sans", sans-serif' }}>
+                    <h1 className="text-2xl font-bold text-white" style={{ fontFamily: '"Work Sans", sans-serif' }}>
                         Control de Vigilancia
                     </h1>
                 </div>
             </header>
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Back Button - Only show when viewing authorization details */}
+                {currentAuth && (
+                    <button
+                        onClick={() => {
+                            setCurrentAuth(null);
+                            setSearchQuery('');
+                            setSelectedItems([]);
+                            setObservations('');
+                        }}
+                        className="mb-4 flex items-center gap-2 px-4 py-2 text-[#39A900] hover:text-[#007832] font-bold transition-colors"
+                    >
+                        <ArrowLeft className="h-5 w-5" />
+                        Volver
+                    </button>
+                )}
+
                 {/* Tab Navigation */}
                 <div className="flex gap-2 mb-6 border-b border-gray-200">
                     <button
@@ -712,9 +727,25 @@ export default function WatchmanDashboard() {
                         </div>
 
                         <div className="bg-white rounded-lg shadow-sm p-6">
-                            <h3 className="text-lg font-bold text-[#00304D] mb-4">
-                                Bienes Asociados
-                            </h3>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-[#00304D]">
+                                    Bienes Asociados
+                                </h3>
+                                {validationStatus.isValid && currentAuth.bienes.length > 1 && (
+                                    <button
+                                        onClick={() => {
+                                            if (selectedItems.length === currentAuth.bienes.length) {
+                                                setSelectedItems([]);
+                                            } else {
+                                                setSelectedItems(currentAuth.bienes.map(b => b.serial));
+                                            }
+                                        }}
+                                        className="px-4 py-2 text-sm font-bold bg-[#39A900] text-white rounded-lg hover:bg-[#007832] transition-colors"
+                                    >
+                                        {selectedItems.length === currentAuth.bienes.length ? 'Deseleccionar Todos' : 'Seleccionar Todos'}
+                                    </button>
+                                )}
+                            </div>
                             <div className="space-y-3">
                                 {currentAuth.bienes.map((bien) => (
                                     <label
@@ -903,7 +934,14 @@ export default function WatchmanDashboard() {
             {
                 showSuccessModal && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg p-8 max-w-md mx-4 shadow-2xl">
+                        <div className="bg-white rounded-lg p-8 max-w-md mx-4 shadow-2xl relative">
+                            <button
+                                onClick={closeSuccessModal}
+                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                                aria-label="Cerrar"
+                            >
+                                <X className="h-6 w-6" />
+                            </button>
                             <div className="text-center">
                                 <CheckCircle className="h-16 w-16 text-[#39A900] mx-auto mb-4" />
                                 <h3 className="text-2xl font-bold text-[#00304D] mb-2">
