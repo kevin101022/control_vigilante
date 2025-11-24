@@ -13,7 +13,9 @@ import {
     History,
     Calendar,
     X,
-    ArrowLeft
+    ArrowLeft,
+    User,
+    ChevronDown
 } from 'lucide-react';
 
 // Initial Mock Data
@@ -82,7 +84,9 @@ export default function WatchmanDashboard() {
     const [currentAuth, setCurrentAuth] = useState<Authorization | null>(null);
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [observations, setObservations] = useState('');
+    const [exitLocation, setExitLocation] = useState('');
     const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false);
 
     // Mutable state for authorizations and log
     const [authorizations, setAuthorizations] = useState<Authorization[]>(initialMockData);
@@ -180,6 +184,7 @@ export default function WatchmanDashboard() {
         setSearchQuery('');
         setSelectedItems([]);
         setObservations('');
+        setExitLocation('');
     };
 
     // Register Re-entry - Updates state and logs action
@@ -220,7 +225,7 @@ export default function WatchmanDashboard() {
         setShowSuccessModal(true);
     };
 
-    const canRegisterExit = validationStatus.isValid && selectedItems.length > 0;
+    const canRegisterExit = validationStatus.isValid && selectedItems.length > 0 && exitLocation.trim() !== '';
 
     // Filter authorizations for SALIDA table (only show items "En Sitio")
     const filteredAuthorizations = useMemo(() => {
@@ -288,18 +293,50 @@ export default function WatchmanDashboard() {
         <div className="min-h-screen bg-[#F9FAFB]">
             {/* Header */}
             <header className="bg-[#39A900] shadow-sm">
-                <div className="w-full px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4">
-                    <img
-                        src="https://res.cloudinary.com/dil3rjo71/image/upload/v1763990215/logo-de-Sena-sin-fondo-Blanco-300x300_tlss3c.webp"
-                        alt="SENA Logo"
-                        className="h-12 w-12 object-contain"
-                        onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                        }}
-                    />
-                    <h1 className="text-2xl font-bold text-white" style={{ fontFamily: '"Work Sans", sans-serif' }}>
-                        Control de Vigilancia
-                    </h1>
+                <div className="w-full px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <img
+                            src="https://res.cloudinary.com/dil3rjo71/image/upload/v1763990215/logo-de-Sena-sin-fondo-Blanco-300x300_tlss3c.webp"
+                            alt="SENA Logo"
+                            className="h-12 w-12 object-contain"
+                            onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                            }}
+                        />
+                        <div className="h-12 w-px bg-white opacity-50"></div>
+                        <h1 className="text-2xl font-bold text-white" style={{ fontFamily: '"Work Sans", sans-serif' }}>
+                            Control de Vigilancia
+                        </h1>
+                    </div>
+
+                    {/* User Menu */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowUserMenu(!showUserMenu)}
+                            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                        >
+                            <User className="h-6 w-6 text-white" />
+                            <p className="text-white font-bold text-base">Vigilante</p>
+                            <ChevronDown className={`h-5 w-5 text-white transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {showUserMenu && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
+                                <button
+                                    onClick={() => {
+                                        // Aquí iría la lógica de cerrar sesión
+                                        console.log('Cerrando sesión...');
+                                        setShowUserMenu(false);
+                                    }}
+                                    className="w-full px-4 py-2 text-left text-gray-900 hover:bg-gray-100 transition-colors flex items-center gap-2 font-semibold"
+                                >
+                                    <LogOut className="h-4 w-4 text-red-600" />
+                                    Cerrar Sesión
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header>
 
@@ -312,6 +349,7 @@ export default function WatchmanDashboard() {
                             setSearchQuery('');
                             setSelectedItems([]);
                             setObservations('');
+                            setExitLocation('');
                         }}
                         className="mb-4 flex items-center gap-2 px-4 py-2 text-[#39A900] hover:text-[#007832] font-bold transition-colors"
                     >
@@ -784,6 +822,23 @@ export default function WatchmanDashboard() {
                                 ))}
                             </div>
 
+                            {/* Exit Location Selector */}
+                            <div className="mt-6">
+                                <label className="block text-sm font-bold text-gray-900 mb-2">
+                                    Lugar de Salida <span className="text-red-600">*</span>
+                                </label>
+                                <select
+                                    value={exitLocation}
+                                    onChange={(e) => setExitLocation(e.target.value)}
+                                    disabled={!validationStatus.isValid}
+                                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#39A900] focus:border-transparent outline-none text-gray-900 font-medium ${!validationStatus.isValid ? 'opacity-50 cursor-not-allowed bg-gray-100' : ''}`}
+                                >
+                                    <option value="">Seleccione el edificio de salida</option>
+                                    <option value="CIES">CIES</option>
+                                    <option value="CEDRUM">CEDRUM</option>
+                                </select>
+                            </div>
+
                             <div className="mt-6 flex justify-end">
                                 <button
                                     onClick={handleRegisterExit}
@@ -798,9 +853,14 @@ export default function WatchmanDashboard() {
                                 </button>
                             </div>
 
-                            {!validationStatus.isValid && (
+                            {!canRegisterExit && (
                                 <p className="mt-2 text-sm text-[#DC2626] font-bold text-right">
-                                    Botón bloqueado: Faltan autorizaciones requeridas
+                                    {!validationStatus.isValid 
+                                        ? 'Botón bloqueado: Faltan autorizaciones requeridas'
+                                        : selectedItems.length === 0
+                                        ? 'Botón bloqueado: Seleccione al menos un bien'
+                                        : 'Botón bloqueado: Seleccione el lugar de salida'
+                                    }
                                 </p>
                             )}
                         </div>
