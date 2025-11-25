@@ -24,25 +24,37 @@ const initialMockData = [
         id: "AUT-2024-001",
         solicitante: "Juan Pérez (Instructor)",
         estado_firmas: { cuentadante: true, admin: true, coordinador: true },
+        uso_motivo: "Capacitación externa",
+        destino: "Sede Norte - Salón 301",
+        fecha_salida: "2024-11-24",
+        fecha_limite_regreso: "2024-11-25",
         bienes: [
-            { serial: "PC-HP-001", nombre: "Portátil HP ProBook", marca: "HP", placa: "SENA-001", estado: "En Sitio" },
-            { serial: "TAB-SAM-099", nombre: "Tablet Samsung S6", marca: "Samsung", placa: "SENA-099", estado: "En Sitio" }
+            { serial: "PC-HP-001", nombre: "Portátil HP ProBook", marca: "HP", modelo: "ProBook 450 G8", placa: "SENA-001", estado: "En Sitio" },
+            { serial: "TAB-SAM-099", nombre: "Tablet Samsung S6", marca: "Samsung", modelo: "Galaxy Tab S6", placa: "SENA-099", estado: "En Sitio" }
         ]
     },
     {
         id: "AUT-2024-002",
         solicitante: "Maria Gomez (Administrativa)",
         estado_firmas: { cuentadante: true, admin: false, coordinador: true },
+        uso_motivo: "Presentación institucional",
+        destino: "Auditorio Principal",
+        fecha_salida: "2024-11-24",
+        fecha_limite_regreso: "2024-11-24",
         bienes: [
-            { serial: "PROY-EPS-200", nombre: "Video Beam Epson", marca: "Epson", placa: "SENA-200", estado: "En Sitio" }
+            { serial: "PROY-EPS-200", nombre: "Video Beam Epson", marca: "Epson", modelo: "PowerLite X49", placa: "SENA-200", estado: "En Sitio" }
         ]
     },
     {
         id: "AUT-2024-003",
         solicitante: "Carlos Ruiz (Contratista)",
         estado_firmas: { cuentadante: true, admin: true, coordinador: true },
+        uso_motivo: "Registro fotográfico evento",
+        destino: "Centro Comercial Andino",
+        fecha_salida: "2024-11-23",
+        fecha_limite_regreso: "2024-11-24",
         bienes: [
-            { serial: "CAM-CAN-500", nombre: "Cámara Canon EOS", marca: "Canon", placa: "SENA-500", estado: "Afuera" }
+            { serial: "CAM-CAN-500", nombre: "Cámara Canon EOS", marca: "Canon", modelo: "EOS 90D", placa: "SENA-500", estado: "Afuera" }
         ]
     }
 ];
@@ -57,10 +69,15 @@ interface Authorization {
         admin: boolean;
         coordinador: boolean;
     };
+    uso_motivo: string;
+    destino: string;
+    fecha_salida: string;
+    fecha_limite_regreso: string;
     bienes: Array<{
         serial: string;
         nombre: string;
         marca: string;
+        modelo: string;
         placa: string;
         estado: string;
     }>;
@@ -75,6 +92,7 @@ interface LogEntry {
     bienesCount: number;
     bienes: string[];
     observaciones?: string;
+    bienesNoSalieron?: Array<{ serial: string; nombre: string; motivo: string }>;
 }
 
 export default function WatchmanDashboard() {
@@ -87,6 +105,8 @@ export default function WatchmanDashboard() {
     const [exitLocation, setExitLocation] = useState('');
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const [itemObservations, setItemObservations] = useState<Record<string, string>>({});
+    const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
     // Mutable state for authorizations and log
     const [authorizations, setAuthorizations] = useState<Authorization[]>(initialMockData);
@@ -143,22 +163,35 @@ export default function WatchmanDashboard() {
 
         const now = new Date();
 
-        // Update authorization state - change selected items to "Afuera"
+        // Update authorization state - change selected items to "Afuera" and unselected to "No Salió"
         setAuthorizations(prevAuths =>
             prevAuths.map(auth => {
                 if (auth.id === currentAuth.id) {
                     return {
                         ...auth,
-                        bienes: auth.bienes.map(bien =>
-                            selectedItems.includes(bien.serial)
-                                ? { ...bien, estado: "Afuera" }
-                                : bien
-                        )
+                        bienes: auth.bienes.map(bien => {
+                            if (selectedItems.includes(bien.serial)) {
+                                return { ...bien, estado: "Afuera" };
+                            } else if (bien.estado === "En Sitio") {
+                                // Si no fue seleccionado y estaba "En Sitio", marcarlo como "No Salió"
+                                return { ...bien, estado: "No Salió" };
+                            }
+                            return bien;
+                        })
                     };
                 }
                 return auth;
             })
         );
+
+        // Preparar información de bienes que NO salieron
+        const bienesNoSalieron = currentAuth.bienes
+            .filter(bien => !selectedItems.includes(bien.serial))
+            .map(bien => ({
+                serial: bien.serial,
+                nombre: bien.nombre,
+                motivo: itemObservations[bien.serial] || ''
+            }));
 
         // Add to action log
         const logEntry: LogEntry = {
@@ -168,7 +201,8 @@ export default function WatchmanDashboard() {
             autorizacionId: currentAuth.id,
             solicitante: currentAuth.solicitante,
             bienesCount: selectedItems.length,
-            bienes: selectedItems
+            bienes: selectedItems,
+            bienesNoSalieron: bienesNoSalieron.length > 0 ? bienesNoSalieron : undefined
         };
         setActionLog(prev => [logEntry, ...prev]);
 
@@ -185,6 +219,7 @@ export default function WatchmanDashboard() {
         setSelectedItems([]);
         setObservations('');
         setExitLocation('');
+        setItemObservations({});
     };
 
     // Register Re-entry - Updates state and logs action
@@ -192,15 +227,19 @@ export default function WatchmanDashboard() {
         if (!currentAuth) return;
 
         const now = new Date();
-        const allBienes = currentAuth.bienes.map(b => b.serial);
+        // Solo reingresar los bienes que están "Afuera"
+        const bienesAfuera = currentAuth.bienes.filter(b => b.estado === "Afuera");
+        const bienesAfueraSerials = bienesAfuera.map(b => b.serial);
 
-        // Update authorization state - change all items back to "En Sitio"
+        // Update authorization state - change only "Afuera" items back to "En Sitio"
         setAuthorizations(prevAuths =>
             prevAuths.map(auth => {
                 if (auth.id === currentAuth.id) {
                     return {
                         ...auth,
-                        bienes: auth.bienes.map(bien => ({ ...bien, estado: "En Sitio" }))
+                        bienes: auth.bienes.map(bien => 
+                            bien.estado === "Afuera" ? { ...bien, estado: "En Sitio" } : bien
+                        )
                     };
                 }
                 return auth;
@@ -214,8 +253,8 @@ export default function WatchmanDashboard() {
             tipo: 'REINGRESO',
             autorizacionId: currentAuth.id,
             solicitante: currentAuth.solicitante,
-            bienesCount: currentAuth.bienes.length,
-            bienes: allBienes,
+            bienesCount: bienesAfuera.length,
+            bienes: bienesAfueraSerials,
             observaciones: observations || undefined
         };
         setActionLog(prev => [logEntry, ...prev]);
@@ -225,7 +264,28 @@ export default function WatchmanDashboard() {
         setShowSuccessModal(true);
     };
 
-    const canRegisterExit = validationStatus.isValid && selectedItems.length > 0 && exitLocation.trim() !== '';
+    // Validación para registro de salida
+    const canRegisterExit = useMemo(() => {
+        if (!validationStatus.isValid || selectedItems.length === 0 || exitLocation.trim() === '') {
+            return false;
+        }
+        
+        // Si hay bienes y hay varios bienes en la autorización
+        if (currentAuth && currentAuth.bienes.length > 1) {
+            // Verificar que todos los bienes NO seleccionados tengan observación
+            const unselectedItems = currentAuth.bienes.filter(b => !selectedItems.includes(b.serial));
+            const allUnselectedHaveObservations = unselectedItems.every(
+                bien => itemObservations[bien.serial]?.trim() !== '' && itemObservations[bien.serial] !== undefined
+            );
+            
+            // Si hay bienes no seleccionados, deben tener observación
+            if (unselectedItems.length > 0 && !allUnselectedHaveObservations) {
+                return false;
+            }
+        }
+        
+        return true;
+    }, [validationStatus.isValid, selectedItems, exitLocation, currentAuth, itemObservations]);
 
     // Filter authorizations for SALIDA table (only show items "En Sitio")
     const filteredAuthorizations = useMemo(() => {
@@ -350,6 +410,7 @@ export default function WatchmanDashboard() {
                             setSelectedItems([]);
                             setObservations('');
                             setExitLocation('');
+                            setItemObservations({});
                         }}
                         className="mb-4 flex items-center gap-2 px-4 py-2 text-[#39A900] hover:text-[#007832] font-bold transition-colors"
                     >
@@ -366,6 +427,7 @@ export default function WatchmanDashboard() {
                             setCurrentAuth(null);
                             setSearchQuery('');
                             setSelectedItems([]);
+                            setItemObservations({});
                         }}
                         className={`px-6 py-3 font-semibold transition-colors relative ${activeTab === 'SALIDA'
                             ? 'text-[#39A900] border-b-2 border-[#39A900]'
@@ -637,6 +699,7 @@ export default function WatchmanDashboard() {
                                             <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Solicitante</th>
                                             <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider">Bienes</th>
                                             <th className="px-4 py-3 text-left text-xs font-bold text-gray-900 uppercase tracking-wider">Observaciones</th>
+                                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-900 uppercase tracking-wider">Acción</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
@@ -681,6 +744,14 @@ export default function WatchmanDashboard() {
                                                         {log.observaciones || '-'}
                                                     </span>
                                                 </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <button
+                                                        onClick={() => setSelectedLog(log)}
+                                                        className="px-3 py-1.5 text-sm font-bold bg-[#39A900] text-white rounded-lg hover:bg-[#007832] transition-colors"
+                                                    >
+                                                        Ver más
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -703,9 +774,60 @@ export default function WatchmanDashboard() {
                             <h2 className="text-xl font-bold text-[#00304D] mb-4">
                                 Autorización: {currentAuth.id}
                             </h2>
-                            <p className="text-gray-900 mb-4 text-lg">
-                                <strong>Solicitante:</strong> {currentAuth.solicitante}
-                            </p>
+                            
+                            {/* Información de la Autorización */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Nombre Solicitante</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.solicitante}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Uso o Motivo</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.uso_motivo}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Destino</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.destino}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Fecha Real de Salida Registrada</p>
+                                    {(() => {
+                                        const exitLog = actionLog.find(
+                                            log => log.tipo === 'SALIDA' && log.autorizacionId === currentAuth.id
+                                        );
+
+                                        if (exitLog) {
+                                            return (
+                                                <div>
+                                                    <p className="text-gray-900 font-semibold text-base">
+                                                        {exitLog.timestamp.toLocaleDateString('es-CO', {
+                                                            weekday: 'long',
+                                                            year: 'numeric',
+                                                            month: 'long',
+                                                            day: 'numeric'
+                                                        })}
+                                                    </p>
+                                                    <p className="text-xs text-gray-900 font-semibold mt-0.5">
+                                                        Hora: {exitLog.timestamp.toLocaleTimeString('es-CO')}
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+                                        return <p className="text-gray-900 font-semibold text-base">Pendiente de registro</p>;
+                                    })()}
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Fecha Límite de Regreso</p>
+                                    <p className="text-gray-900 font-semibold text-base">
+                                        {new Date(currentAuth.fecha_limite_regreso).toLocaleDateString('es-CO', {
+                                            weekday: 'long',
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
 
                             <div className="space-y-3">
                                 <h3 className="font-bold text-gray-900">Estado de Firmas Digitales:</h3>
@@ -786,39 +908,63 @@ export default function WatchmanDashboard() {
                             </div>
                             <div className="space-y-3">
                                 {currentAuth.bienes.map((bien) => (
-                                    <label
-                                        key={bien.serial}
-                                        className={`flex items-center gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${selectedItems.includes(bien.serial)
-                                            ? 'border-[#39A900] bg-green-50'
-                                            : 'border-gray-200 hover:border-gray-300'
-                                            } ${!validationStatus.isValid ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedItems.includes(bien.serial)}
-                                            onChange={() => toggleItem(bien.serial)}
-                                            disabled={!validationStatus.isValid}
-                                            className="h-5 w-5 text-[#39A900] rounded focus:ring-[#39A900]"
-                                        />
-                                        <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
-                                            <div>
-                                                <p className="text-xs text-gray-900 font-bold">Serial</p>
-                                                <p className="font-semibold text-gray-900">{bien.serial}</p>
+                                    <div key={bien.serial} className="space-y-2">
+                                        <label
+                                            className={`flex items-center gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${selectedItems.includes(bien.serial)
+                                                ? 'border-[#39A900] bg-green-50'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                                } ${!validationStatus.isValid ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedItems.includes(bien.serial)}
+                                                onChange={() => toggleItem(bien.serial)}
+                                                disabled={!validationStatus.isValid}
+                                                className="h-5 w-5 text-[#39A900] rounded focus:ring-[#39A900]"
+                                            />
+                                            <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-4">
+                                                <div>
+                                                    <p className="text-xs text-gray-900 font-bold">Bien</p>
+                                                    <p className="font-semibold text-gray-900">{bien.nombre}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-900 font-bold">Marca</p>
+                                                    <p className="font-semibold text-gray-900">{bien.marca}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-900 font-bold">Modelo</p>
+                                                    <p className="font-semibold text-gray-900">{bien.modelo}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-900 font-bold">Placa</p>
+                                                    <p className="font-semibold text-gray-900">{bien.placa}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-900 font-bold">Serial</p>
+                                                    <p className="font-semibold text-gray-900">{bien.serial}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="text-xs text-gray-900 font-bold">Placa</p>
-                                                <p className="font-semibold text-gray-900">{bien.placa}</p>
+                                        </label>
+                                        
+                                        {/* Observación para bienes NO seleccionados */}
+                                        {!selectedItems.includes(bien.serial) && validationStatus.isValid && (
+                                            <div className="ml-9 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                                                <label className="block text-xs font-bold text-gray-900 mb-1">
+                                                    ¿Por qué no sale este bien? <span className="text-red-600">*</span>
+                                                </label>
+                                                <textarea
+                                                    value={itemObservations[bien.serial] || ''}
+                                                    onChange={(e) => setItemObservations(prev => ({
+                                                        ...prev,
+                                                        [bien.serial]: e.target.value
+                                                    }))}
+                                                    placeholder="Ej: El solicitante decidió no llevarlo, equipo en mantenimiento, etc."
+                                                    rows={2}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#39A900] focus:border-transparent outline-none resize-none text-sm text-gray-900 placeholder-gray-500"
+                                                />
                                             </div>
-                                            <div>
-                                                <p className="text-xs text-gray-900 font-bold">Nombre</p>
-                                                <p className="font-semibold text-gray-900">{bien.nombre}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-gray-900 font-bold">Marca</p>
-                                                <p className="font-semibold text-gray-900">{bien.marca}</p>
-                                            </div>
-                                        </div>
-                                    </label>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
 
@@ -859,7 +1005,9 @@ export default function WatchmanDashboard() {
                                         ? 'Botón bloqueado: Faltan autorizaciones requeridas'
                                         : selectedItems.length === 0
                                         ? 'Botón bloqueado: Seleccione al menos un bien'
-                                        : 'Botón bloqueado: Seleccione el lugar de salida'
+                                        : exitLocation.trim() === ''
+                                        ? 'Botón bloqueado: Seleccione el lugar de salida'
+                                        : 'Botón bloqueado: Complete las observaciones de los bienes que no salen'
                                     }
                                 </p>
                             )}
@@ -874,67 +1022,90 @@ export default function WatchmanDashboard() {
                             <h2 className="text-xl font-bold text-[#00304D] mb-4">
                                 Autorización: {currentAuth.id}
                             </h2>
-                            <p className="text-gray-900 mb-4 text-lg">
-                                <strong>Solicitante:</strong> {currentAuth.solicitante}
-                            </p>
+                            
+                            {/* Información de la Autorización */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Nombre Solicitante</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.solicitante}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Uso o Motivo</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.uso_motivo}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Destino</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.destino}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Fecha Real de Salida Registrada</p>
+                                    {(() => {
+                                        const exitLog = actionLog.find(
+                                            log => log.tipo === 'SALIDA' && log.autorizacionId === currentAuth.id
+                                        );
 
-                            {/* Exit Date Info */}
-                            {(() => {
-                                const exitLog = actionLog.find(
-                                    log => log.tipo === 'SALIDA' && log.autorizacionId === currentAuth.id
-                                );
-
-                                if (exitLog) {
-                                    return (
-                                        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4 flex items-start gap-3">
-                                            <Calendar className="h-6 w-6 text-blue-600 flex-shrink-0 mt-0.5" />
-                                            <div>
-                                                <p className="font-bold text-blue-900 text-base">
-                                                    Fecha de Salida
-                                                </p>
-                                                <p className="text-blue-800 font-bold mt-1">
-                                                    {exitLog.timestamp.toLocaleDateString('es-CO', {
-                                                        weekday: 'long',
-                                                        year: 'numeric',
-                                                        month: 'long',
-                                                        day: 'numeric'
-                                                    })}
-                                                </p>
-                                                <p className="text-sm text-blue-900 font-semibold mt-0.5">
-                                                    Hora: {exitLog.timestamp.toLocaleTimeString('es-CO')}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })()}
+                                        if (exitLog) {
+                                            return (
+                                                <div>
+                                                    <p className="text-gray-900 font-semibold text-base">
+                                                        {exitLog.timestamp.toLocaleDateString('es-CO', {
+                                                            weekday: 'long',
+                                                            year: 'numeric',
+                                                            month: 'long',
+                                                            day: 'numeric'
+                                                        })}
+                                                    </p>
+                                                    <p className="text-xs text-gray-900 font-semibold mt-0.5">
+                                                        Hora: {exitLog.timestamp.toLocaleTimeString('es-CO')}
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+                                        return <p className="text-gray-900 font-semibold text-base">Pendiente de registro</p>;
+                                    })()}
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Fecha Límite de Regreso</p>
+                                    <p className="text-gray-900 font-semibold text-base">
+                                        {new Date(currentAuth.fecha_limite_regreso).toLocaleDateString('es-CO', {
+                                            weekday: 'long',
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric'
+                                        })}
+                                    </p>
+                                </div>
+                            </div>
 
                             <h3 className="text-lg font-bold text-[#00304D] mb-4">
                                 Bienes para Reingreso
                             </h3>
                             <div className="space-y-3 mb-6">
-                                {currentAuth.bienes.map((bien) => (
+                                {currentAuth.bienes.filter(b => b.estado === "Afuera").map((bien) => (
                                     <div
                                         key={bien.serial}
                                         className="p-4 border-2 border-gray-200 rounded-lg"
                                     >
-                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
                                             <div>
-                                                <p className="text-xs text-gray-900 font-bold">Serial</p>
-                                                <p className="font-semibold text-gray-900">{bien.serial}</p>
+                                                <p className="text-xs text-gray-900 font-bold">Bien</p>
+                                                <p className="font-semibold text-gray-900">{bien.nombre}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-900 font-bold">Marca</p>
+                                                <p className="font-semibold text-gray-900">{bien.marca}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-900 font-bold">Modelo</p>
+                                                <p className="font-semibold text-gray-900">{bien.modelo}</p>
                                             </div>
                                             <div>
                                                 <p className="text-xs text-gray-900 font-bold">Placa</p>
                                                 <p className="font-semibold text-gray-900">{bien.placa}</p>
                                             </div>
                                             <div>
-                                                <p className="text-xs text-gray-900 font-bold">Nombre</p>
-                                                <p className="font-semibold text-gray-900">{bien.nombre}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-gray-900 font-bold">Marca</p>
-                                                <p className="font-semibold text-gray-900">{bien.marca}</p>
+                                                <p className="text-xs text-gray-900 font-bold">Serial</p>
+                                                <p className="font-semibold text-gray-900">{bien.serial}</p>
                                             </div>
                                             <div>
                                                 <p className="text-xs text-gray-900 font-bold">Estado</p>
@@ -989,6 +1160,121 @@ export default function WatchmanDashboard() {
                     </div>
                 )}
             </main>
+
+            {/* Log Details Modal */}
+            {selectedLog && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+                        <button
+                            onClick={() => setSelectedLog(null)}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                            aria-label="Cerrar"
+                        >
+                            <X className="h-6 w-6" />
+                        </button>
+                        
+                        <h2 className="text-2xl font-bold text-[#00304D] mb-4">
+                            Detalles del Registro
+                        </h2>
+
+                        {/* Información General */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                            <div>
+                                <p className="text-xs text-gray-900 font-bold mb-1">Tipo de Acción</p>
+                                {selectedLog.tipo === 'SALIDA' ? (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-900">
+                                        <LogOut className="h-3 w-3 mr-1" />
+                                        SALIDA
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-900">
+                                        <LogIn className="h-3 w-3 mr-1" />
+                                        REINGRESO
+                                    </span>
+                                )}
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-900 font-bold mb-1">Código de Autorización</p>
+                                <p className="text-gray-900 font-semibold text-base">{selectedLog.autorizacionId}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-900 font-bold mb-1">Solicitante</p>
+                                <p className="text-gray-900 font-semibold text-base">{selectedLog.solicitante}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-900 font-bold mb-1">Fecha y Hora</p>
+                                <p className="text-gray-900 font-semibold text-base">
+                                    {selectedLog.timestamp.toLocaleDateString('es-CO', {
+                                        weekday: 'long',
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                    })}
+                                </p>
+                                <p className="text-xs text-gray-900 font-semibold mt-0.5">
+                                    Hora: {selectedLog.timestamp.toLocaleTimeString('es-CO')}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Bienes que salieron/reingresaron */}
+                        <div className="mb-6">
+                            <h3 className="text-lg font-bold text-[#00304D] mb-3">
+                                Bienes {selectedLog.tipo === 'SALIDA' ? 'que Salieron' : 'que Reingresaron'} ({selectedLog.bienesCount})
+                            </h3>
+                            <div className="space-y-2">
+                                {selectedLog.bienes.map((serial, index) => (
+                                    <div key={index} className="p-3 bg-green-50 border-l-4 border-green-500 rounded">
+                                        <p className="text-sm font-bold text-gray-900">{serial}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Bienes que NO salieron */}
+                        {selectedLog.bienesNoSalieron && selectedLog.bienesNoSalieron.length > 0 && (
+                            <div className="mb-6">
+                                <h3 className="text-lg font-bold text-[#00304D] mb-3">
+                                    Bienes que NO Salieron ({selectedLog.bienesNoSalieron.length})
+                                </h3>
+                                <div className="space-y-3">
+                                    {selectedLog.bienesNoSalieron.map((bien, index) => (
+                                        <div key={index} className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                                            <p className="text-sm font-bold text-gray-900 mb-1">{bien.nombre}</p>
+                                            <p className="text-xs text-gray-900 font-semibold mb-2">Serial: {bien.serial}</p>
+                                            <div className="bg-white p-2 rounded border border-yellow-200">
+                                                <p className="text-xs font-bold text-gray-900 mb-1">Motivo:</p>
+                                                <p className="text-sm text-gray-900">{bien.motivo}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Observaciones generales */}
+                        {selectedLog.observaciones && (
+                            <div className="mb-6">
+                                <h3 className="text-lg font-bold text-[#00304D] mb-3">
+                                    Observaciones Generales
+                                </h3>
+                                <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+                                    <p className="text-sm text-gray-900">{selectedLog.observaciones}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setSelectedLog(null)}
+                                className="px-6 py-2 bg-[#39A900] text-white rounded-lg font-bold hover:bg-[#007832] transition-colors"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Success Modal */}
             {
