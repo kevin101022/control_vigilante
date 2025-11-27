@@ -18,52 +18,11 @@ import {
     ChevronDown
 } from 'lucide-react';
 
-// Initial Mock Data
-const initialMockData = [
-    {
-        id: "AUT-2024-001",
-        solicitante: "Juan Pérez (Instructor)",
-        estado_firmas: { cuentadante: true, admin: true, coordinador: true },
-        uso_motivo: "Capacitación externa",
-        destino: "Sede Norte - Salón 301",
-        fecha_salida: "2024-11-24",
-        fecha_limite_regreso: "2024-11-25",
-        bienes: [
-            { serial: "PC-HP-001", nombre: "Portátil HP ProBook", marca: "HP", modelo: "ProBook 450 G8", placa: "SENA-001", estado: "En Sitio" },
-            { serial: "TAB-SAM-099", nombre: "Tablet Samsung S6", marca: "Samsung", modelo: "Galaxy Tab S6", placa: "SENA-099", estado: "En Sitio" }
-        ]
-    },
-    {
-        id: "AUT-2024-002",
-        solicitante: "Maria Gomez (Administrativa)",
-        estado_firmas: { cuentadante: true, admin: false, coordinador: true },
-        uso_motivo: "Presentación institucional",
-        destino: "Auditorio Principal",
-        fecha_salida: "2024-11-24",
-        fecha_limite_regreso: "2024-11-24",
-        bienes: [
-            { serial: "PROY-EPS-200", nombre: "Video Beam Epson", marca: "Epson", modelo: "PowerLite X49", placa: "SENA-200", estado: "En Sitio" }
-        ]
-    },
-    {
-        id: "AUT-2024-003",
-        solicitante: "Carlos Ruiz (Contratista)",
-        estado_firmas: { cuentadante: true, admin: true, coordinador: true },
-        uso_motivo: "Registro fotográfico evento",
-        destino: "Centro Comercial Andino",
-        fecha_salida: "2024-11-23",
-        fecha_limite_regreso: "2024-11-24",
-        bienes: [
-            { serial: "CAM-CAN-500", nombre: "Cámara Canon EOS", marca: "Canon", modelo: "EOS 90D", placa: "SENA-500", estado: "Afuera" }
-        ]
-    }
-];
-
-type Tab = 'SALIDA' | 'REINGRESO' | 'BITACORA';
-
 interface Authorization {
     id: string;
     solicitante: string;
+    documento: string;
+    ambiente: string;
     estado_firmas: {
         cuentadante: boolean;
         admin: boolean;
@@ -89,11 +48,62 @@ interface LogEntry {
     tipo: 'SALIDA' | 'REINGRESO';
     autorizacionId: string;
     solicitante: string;
+    documento: string; // Added field
+    ambiente: string;  // Added field
     bienesCount: number;
     bienes: string[];
     observaciones?: string;
-    bienesNoSalieron?: Array<{ serial: string; nombre: string; motivo: string }>;
+    bienesNoSalieron?: Array<{ serial: string; nombre: string }>;
 }
+
+// Initial Mock Data
+const initialMockData: Authorization[] = [
+    {
+        id: "AUT-2024-001",
+        solicitante: "Juan Pérez (Instructor)",
+        documento: "1098765432",
+        ambiente: "Sala de Sistemas 1",
+        estado_firmas: { cuentadante: true, admin: true, coordinador: true },
+        uso_motivo: "Capacitación externa",
+        destino: "Sede Norte - Salón 301",
+        fecha_salida: "2024-11-24",
+        fecha_limite_regreso: "2024-11-25",
+        bienes: [
+            { serial: "PC-HP-001", nombre: "Portátil HP ProBook", marca: "HP", modelo: "ProBook 450 G8", placa: "SENA-001", estado: "En Sitio" },
+            { serial: "TAB-SAM-099", nombre: "Tablet Samsung S6", marca: "Samsung", modelo: "Galaxy Tab S6", placa: "SENA-099", estado: "En Sitio" }
+        ]
+    },
+    {
+        id: "AUT-2024-002",
+        solicitante: "Maria Gomez (Administrativa)",
+        documento: "52345678",
+        ambiente: "Coordinación Académica",
+        estado_firmas: { cuentadante: true, admin: false, coordinador: true },
+        uso_motivo: "Presentación institucional",
+        destino: "Auditorio Principal",
+        fecha_salida: "2024-11-24",
+        fecha_limite_regreso: "2024-11-24",
+        bienes: [
+            { serial: "PROY-EPS-200", nombre: "Video Beam Epson", marca: "Epson", modelo: "PowerLite X49", placa: "SENA-200", estado: "En Sitio" }
+        ]
+    },
+    {
+        id: "AUT-2024-003",
+        solicitante: "Carlos Ruiz (Contratista)",
+        documento: "79123456",
+        ambiente: "Almacén General",
+        estado_firmas: { cuentadante: true, admin: true, coordinador: true },
+        uso_motivo: "Registro fotográfico evento",
+        destino: "Centro Comercial Andino",
+        fecha_salida: "2024-11-23",
+        fecha_limite_regreso: "2024-11-24",
+        bienes: [
+            { serial: "CAM-CAN-500", nombre: "Cámara Canon EOS", marca: "Canon", modelo: "EOS 90D", placa: "SENA-500", estado: "Afuera" }
+        ]
+    }
+];
+
+type Tab = 'SALIDA' | 'REINGRESO' | 'BITACORA';
 
 export default function WatchmanDashboard() {
     const [activeTab, setActiveTab] = useState<Tab>('SALIDA');
@@ -105,7 +115,6 @@ export default function WatchmanDashboard() {
     const [exitLocation, setExitLocation] = useState('');
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
-    const [itemObservations, setItemObservations] = useState<Record<string, string>>({});
     const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
     // Mutable state for authorizations and log
@@ -132,8 +141,6 @@ export default function WatchmanDashboard() {
         setCurrentAuth(found || null);
         setIsSearching(false);
     };
-
-    // Validation logic - all 3 signatures required
     const validationStatus = useMemo(() => {
         if (!currentAuth) return { isValid: false, missingSignatures: [] };
 
@@ -189,8 +196,7 @@ export default function WatchmanDashboard() {
             .filter(bien => !selectedItems.includes(bien.serial))
             .map(bien => ({
                 serial: bien.serial,
-                nombre: bien.nombre,
-                motivo: itemObservations[bien.serial] || ''
+                nombre: bien.nombre
             }));
 
         // Add to action log
@@ -200,6 +206,8 @@ export default function WatchmanDashboard() {
             tipo: 'SALIDA',
             autorizacionId: currentAuth.id,
             solicitante: currentAuth.solicitante,
+            documento: currentAuth.documento,
+            ambiente: currentAuth.ambiente,
             bienesCount: selectedItems.length,
             bienes: selectedItems,
             bienesNoSalieron: bienesNoSalieron.length > 0 ? bienesNoSalieron : undefined
@@ -219,7 +227,6 @@ export default function WatchmanDashboard() {
         setSelectedItems([]);
         setObservations('');
         setExitLocation('');
-        setItemObservations({});
     };
 
     // Register Re-entry - Updates state and logs action
@@ -237,7 +244,7 @@ export default function WatchmanDashboard() {
                 if (auth.id === currentAuth.id) {
                     return {
                         ...auth,
-                        bienes: auth.bienes.map(bien => 
+                        bienes: auth.bienes.map(bien =>
                             bien.estado === "Afuera" ? { ...bien, estado: "En Sitio" } : bien
                         )
                     };
@@ -253,6 +260,8 @@ export default function WatchmanDashboard() {
             tipo: 'REINGRESO',
             autorizacionId: currentAuth.id,
             solicitante: currentAuth.solicitante,
+            documento: currentAuth.documento,
+            ambiente: currentAuth.ambiente,
             bienesCount: bienesAfuera.length,
             bienes: bienesAfueraSerials,
             observaciones: observations || undefined
@@ -266,26 +275,8 @@ export default function WatchmanDashboard() {
 
     // Validación para registro de salida
     const canRegisterExit = useMemo(() => {
-        if (!validationStatus.isValid || selectedItems.length === 0 || exitLocation.trim() === '') {
-            return false;
-        }
-        
-        // Si hay bienes y hay varios bienes en la autorización
-        if (currentAuth && currentAuth.bienes.length > 1) {
-            // Verificar que todos los bienes NO seleccionados tengan observación
-            const unselectedItems = currentAuth.bienes.filter(b => !selectedItems.includes(b.serial));
-            const allUnselectedHaveObservations = unselectedItems.every(
-                bien => itemObservations[bien.serial]?.trim() !== '' && itemObservations[bien.serial] !== undefined
-            );
-            
-            // Si hay bienes no seleccionados, deben tener observación
-            if (unselectedItems.length > 0 && !allUnselectedHaveObservations) {
-                return false;
-            }
-        }
-        
-        return true;
-    }, [validationStatus.isValid, selectedItems, exitLocation, currentAuth, itemObservations]);
+        return validationStatus.isValid && selectedItems.length > 0 && exitLocation.trim() !== '';
+    }, [validationStatus.isValid, selectedItems, exitLocation]);
 
     // Filter authorizations for SALIDA table (only show items "En Sitio")
     const filteredAuthorizations = useMemo(() => {
@@ -410,7 +401,6 @@ export default function WatchmanDashboard() {
                             setSelectedItems([]);
                             setObservations('');
                             setExitLocation('');
-                            setItemObservations({});
                         }}
                         className="mb-4 flex items-center gap-2 px-4 py-2 text-[#39A900] hover:text-[#007832] font-bold transition-colors"
                     >
@@ -427,7 +417,6 @@ export default function WatchmanDashboard() {
                             setCurrentAuth(null);
                             setSearchQuery('');
                             setSelectedItems([]);
-                            setItemObservations({});
                         }}
                         className={`px-6 py-3 font-semibold transition-colors relative ${activeTab === 'SALIDA'
                             ? 'text-[#39A900] border-b-2 border-[#39A900]'
@@ -774,7 +763,7 @@ export default function WatchmanDashboard() {
                             <h2 className="text-xl font-bold text-[#00304D] mb-4">
                                 Autorización: {currentAuth.id}
                             </h2>
-                            
+
                             {/* Información de la Autorización */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
                                 <div>
@@ -782,8 +771,16 @@ export default function WatchmanDashboard() {
                                     <p className="text-gray-900 font-semibold text-base">{currentAuth.solicitante}</p>
                                 </div>
                                 <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Documento Identidad</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.documento}</p>
+                                </div>
+                                <div>
                                     <p className="text-xs text-gray-900 font-bold mb-1">Uso o Motivo</p>
                                     <p className="text-gray-900 font-semibold text-base">{currentAuth.uso_motivo}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Ambiente Origen</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.ambiente}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-900 font-bold mb-1">Destino</p>
@@ -945,25 +942,7 @@ export default function WatchmanDashboard() {
                                                 </div>
                                             </div>
                                         </label>
-                                        
-                                        {/* Observación para bienes NO seleccionados */}
-                                        {!selectedItems.includes(bien.serial) && validationStatus.isValid && (
-                                            <div className="ml-9 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
-                                                <label className="block text-xs font-bold text-gray-900 mb-1">
-                                                    ¿Por qué no sale este bien? <span className="text-red-600">*</span>
-                                                </label>
-                                                <textarea
-                                                    value={itemObservations[bien.serial] || ''}
-                                                    onChange={(e) => setItemObservations(prev => ({
-                                                        ...prev,
-                                                        [bien.serial]: e.target.value
-                                                    }))}
-                                                    placeholder="Ej: El solicitante decidió no llevarlo, equipo en mantenimiento, etc."
-                                                    rows={2}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#39A900] focus:border-transparent outline-none resize-none text-sm text-gray-900 placeholder-gray-500"
-                                                />
-                                            </div>
-                                        )}
+
                                     </div>
                                 ))}
                             </div>
@@ -1001,13 +980,11 @@ export default function WatchmanDashboard() {
 
                             {!canRegisterExit && (
                                 <p className="mt-2 text-sm text-[#DC2626] font-bold text-right">
-                                    {!validationStatus.isValid 
+                                    {!validationStatus.isValid
                                         ? 'Botón bloqueado: Faltan autorizaciones requeridas'
                                         : selectedItems.length === 0
-                                        ? 'Botón bloqueado: Seleccione al menos un bien'
-                                        : exitLocation.trim() === ''
-                                        ? 'Botón bloqueado: Seleccione el lugar de salida'
-                                        : 'Botón bloqueado: Complete las observaciones de los bienes que no salen'
+                                            ? 'Botón bloqueado: Seleccione al menos un bien'
+                                            : 'Botón bloqueado: Seleccione el lugar de salida'
                                     }
                                 </p>
                             )}
@@ -1022,7 +999,7 @@ export default function WatchmanDashboard() {
                             <h2 className="text-xl font-bold text-[#00304D] mb-4">
                                 Autorización: {currentAuth.id}
                             </h2>
-                            
+
                             {/* Información de la Autorización */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
                                 <div>
@@ -1030,8 +1007,16 @@ export default function WatchmanDashboard() {
                                     <p className="text-gray-900 font-semibold text-base">{currentAuth.solicitante}</p>
                                 </div>
                                 <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Documento Identidad</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.documento}</p>
+                                </div>
+                                <div>
                                     <p className="text-xs text-gray-900 font-bold mb-1">Uso o Motivo</p>
                                     <p className="text-gray-900 font-semibold text-base">{currentAuth.uso_motivo}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-900 font-bold mb-1">Ambiente Origen</p>
+                                    <p className="text-gray-900 font-semibold text-base">{currentAuth.ambiente}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-900 font-bold mb-1">Destino</p>
@@ -1172,7 +1157,7 @@ export default function WatchmanDashboard() {
                         >
                             <X className="h-6 w-6" />
                         </button>
-                        
+
                         <h2 className="text-2xl font-bold text-[#00304D] mb-4">
                             Detalles del Registro
                         </h2>
@@ -1200,6 +1185,14 @@ export default function WatchmanDashboard() {
                             <div>
                                 <p className="text-xs text-gray-900 font-bold mb-1">Solicitante</p>
                                 <p className="text-gray-900 font-semibold text-base">{selectedLog.solicitante}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-900 font-bold mb-1">Documento Identidad</p>
+                                <p className="text-gray-900 font-semibold text-base">{selectedLog.documento}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-900 font-bold mb-1">Ambiente Origen</p>
+                                <p className="text-gray-900 font-semibold text-base">{selectedLog.ambiente}</p>
                             </div>
                             <div>
                                 <p className="text-xs text-gray-900 font-bold mb-1">Fecha y Hora</p>
@@ -1241,11 +1234,7 @@ export default function WatchmanDashboard() {
                                     {selectedLog.bienesNoSalieron.map((bien, index) => (
                                         <div key={index} className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
                                             <p className="text-sm font-bold text-gray-900 mb-1">{bien.nombre}</p>
-                                            <p className="text-xs text-gray-900 font-semibold mb-2">Serial: {bien.serial}</p>
-                                            <div className="bg-white p-2 rounded border border-yellow-200">
-                                                <p className="text-xs font-bold text-gray-900 mb-1">Motivo:</p>
-                                                <p className="text-sm text-gray-900">{bien.motivo}</p>
-                                            </div>
+                                            <p className="text-xs text-gray-900 font-semibold">Serial: {bien.serial}</p>
                                         </div>
                                     ))}
                                 </div>
