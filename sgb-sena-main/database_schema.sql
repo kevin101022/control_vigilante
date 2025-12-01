@@ -237,37 +237,3 @@ CREATE TABLE IF NOT EXISTS FIRMA_SOLICITUD (
 
 CREATE INDEX fk_FIRMA_SOLICITUD_SOLICITUD1_idx ON FIRMA_SOLICITUD(SOLICITUD_solic_id);
 CREATE INDEX fk_FIRMA_SOLICITUD_ROL_PERSONA1_idx ON FIRMA_SOLICITUD(ROL_PERSONA_ROL_rol_id, ROL_PERSONA_PERSONA_pers_documento);
-
--- -----------------------------------------------------
--- Tabla BITACORA_VIGILANCIA
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS BITACORA_VIGILANCIA (
-  bit_id SERIAL PRIMARY KEY,
-  bit_fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  bit_tipo VARCHAR(20) NOT NULL, -- 'SALIDA' o 'REINGRESO'
-  SOLICITUD_solic_id INT NOT NULL,
-  PERSONA_pers_documento BIGINT NOT NULL, -- Vigilante que registra
-  bit_observaciones TEXT,
-  CONSTRAINT fk_BITACORA_SOLICITUD
-    FOREIGN KEY (SOLICITUD_solic_id)
-    REFERENCES SOLICITUD (solic_id),
-  CONSTRAINT fk_BITACORA_PERSONA
-    FOREIGN KEY (PERSONA_pers_documento)
-    REFERENCES PERSONA (pers_documento)
-);
-
--- -----------------------------------------------------
--- Tabla DETALLE_BITACORA
--- -----------------------------------------------------
-CREATE TABLE IF NOT EXISTS DETALLE_BITACORA (
-  detbit_id SERIAL PRIMARY KEY,
-  BITACORA_bit_id INT NOT NULL,
-  ELEMENTO_elem_placa BIGINT NOT NULL,
-  detbit_estado VARCHAR(20) NOT NULL, -- 'SALIO', 'NO_SALIO', 'REINGRESO'
-  CONSTRAINT fk_DETALLE_BITACORA_BITACORA
-    FOREIGN KEY (BITACORA_bit_id)
-    REFERENCES BITACORA_VIGILANCIA (bit_id),
-  CONSTRAINT fk_DETALLE_BITACORA_ELEMENTO
-    FOREIGN KEY (ELEMENTO_elem_placa)
-    REFERENCES ELEMENTO (elem_placa)
-);
