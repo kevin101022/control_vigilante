@@ -1,0 +1,35 @@
+{
+  "name": "sgb-sena",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "create-users": "node scripts/create-test-users.js",
+    "create-test-data": "node scripts/create-test-data.js",
+    "test-db": "node scripts/test-connection.js",
+    "test-api-login": "node scripts/test-api-login.js",
+    "check-env": "node scripts/check-env.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.555.0",
+    "next": "16.0.3",
+    "pg": "^8.16.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-select": "^5.10.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.3",
+    "tailwindcss": "^4"
+  }
+}

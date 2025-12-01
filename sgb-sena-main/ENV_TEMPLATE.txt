@@ -1,0 +1,29 @@
+# ============================================
+# ARCHIVO DE VARIABLES DE ENTORNO
+# ============================================
+# 
+# IMPORTANTE: Este archivo NO debe subirse a Git (ya está en .gitignore)
+# Contiene credenciales sensibles de tu base de datos y secretos
+#
+# INSTRUCCIONES:
+# 1. Crea este archivo manualmente en la raíz del proyecto
+# 2. Copia y pega este contenido
+# 3. NO lo subas a Git nunca
+# 4. Reinicia el servidor de desarrollo después de crearlo (Ctrl+C y npm run dev)
+# ============================================
+
+# Base de datos PostgreSQL
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=sena_bienes
+DB_USER=postgres
+DB_PASSWORD=123456
+
+# JWT Secret (genera uno random en producción)
+# Este es el secreto usado para firmar los tokens JWT
+# En producción, usa algo más seguro y aleatorio
+JWT_SECRET=sena_super_secreto_jwt_cambiar_en_produccion_2024_sgb
+JWT_EXPIRES_IN=7d
+
+# Node Environment
+NODE_ENV=development
